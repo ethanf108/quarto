@@ -21,22 +21,31 @@ public class Main {
         boolean MO;
         private boolean MouseDown;
         int turnState;
-        byte[][] pieces = new byte[4][4];
+        byte[][] NUPieces = new byte[4][4];
+        byte[][] Pieces = new byte[4][4];
         byte queue = 0b00010000;
+        boolean WON = false;
 
         public void reset() {
             MR = 0;
             MC = 0;
             MouseDown = false;
             turnState = 1;
+            MO = false;
+            WON = false;
             queue = 0b00010000;
             for (int i = 0; i < 4; i++) {
                 for (int j = 0; j < 4; j++) {
-                    pieces[i][j] = 0b00010000;
-                    pieces[i][j] += ((i + 1) % 2) * 8;
-                    pieces[i][j] += ((j + 1) % 2) * 4;
-                    pieces[i][j] += ((i + 2) % 4 < 2 ? 1 : 0) * 2;
-                    pieces[i][j] += ((j + 2) % 4 < 2 ? 1 : 0) * 1;
+                    NUPieces[i][j] = 0b00010000;
+                    NUPieces[i][j] += ((i + 1) % 2) * 8;
+                    NUPieces[i][j] += ((j + 1) % 2) * 4;
+                    NUPieces[i][j] += ((i + 2) % 4 < 2 ? 1 : 0) * 2;
+                    NUPieces[i][j] += ((j + 2) % 4 < 2 ? 1 : 0) * 1;
+                }
+            }
+            for (int i = 0; i < 4; i++) {
+                for (int j = 0; j < 4; j++) {
+                    Pieces[i][j] = 0b00010000;
                 }
             }
         }
@@ -50,12 +59,62 @@ public class Main {
             addMouseMotionListener(this);
         }
 
+        boolean CH(int i, int b, boolean f) {
+            if (f) {
+                return ((Pieces[i][0] | Pieces[i][1] | Pieces[i][2] | Pieces[i][3]) < 16)
+                        && (((Pieces[i][0] & b) == (Pieces[i][1] & b)) == ((Pieces[i][2] & b) == (Pieces[i][3] & b)));
+            } else {
+                return ((Pieces[0][i] | Pieces[1][i] | Pieces[2][i] | Pieces[3][i]) < 16)
+                        && (((Pieces[0][1] & b) == (Pieces[1][1] & b)) == ((Pieces[2][i] & b) == (Pieces[3][i] & b)));
+            }
+        }
+
+        boolean checkWin() {
+            for (int i = 0; i < 4; i++) {
+                if (CH(i, 1, true) || CH(i, 2, true) || CH(i, 4, true) || CH(i, 8, true)) {
+                    WON = true;
+                    Pieces[i][0] += 32;
+                    Pieces[i][1] += 32;
+                    Pieces[i][2] += 32;
+                    Pieces[i][3] += 32;
+                    return true;
+                }
+            }
+            for (int i = 0; i < 4; i++) {
+                if (CH(i, 1, false) || CH(i, 2, false) || CH(i, 4, false) || CH(i, 8, false)) {
+                    WON = true;
+                    Pieces[0][i] += 32;
+                    Pieces[1][i] += 32;
+                    Pieces[2][i] += 32;
+                    Pieces[3][i] += 32;
+                    return true;
+                }
+            }
+            for (int i = 0; i < 3; i++) {
+                for (int j = 0; j < 3; j++) {
+                    for (int k = 0; k < 4; k++) {
+                        if (((Pieces[i][j] | Pieces[i][j + 1] | Pieces[i + 1][j] | Pieces[i + 1][j + 1]) < 16)
+                                && (((Pieces[i][j] & (byte) Math.pow(2, k)) == (Pieces[i][j + 1] & (byte) Math.pow(2, k)))
+                                == ((Pieces[i + 1][j] & (byte) Math.pow(2, k)) == (Pieces[i + 1][j + 1] & (byte) Math.pow(2, k))))) {
+                            Pieces[i][j] += 32;
+                            Pieces[i][j + 1] += 32;
+                            Pieces[i + 1][j] += 32;
+                            Pieces[i + 1][j + 1] += 32;
+                            WON = true;
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
         public void drawPiece(Graphics2D g, byte b, int x, int y, boolean q) {
             if (q) {
                 if (b >= 16) {
                     return;
                 }
-            } else if ((turnState == 1 || turnState == 3) ? b < 16 : b >= 16) {
+            } else if ((turnState == 1 || turnState == 3) ? b < 16 : (b >= 16 && (b & 32) != 32)) {
                 return;
             }
             boolean fill = !((b & 2) == 2);
@@ -89,21 +148,61 @@ public class Main {
             for (int i = 0; i < 4; i++) {
                 for (int j = 0; j < 4; j++) {
                     g.setColor(MO && i == MR && j == MC ? (MouseDown ? Color.RED : Color.GREEN) : Color.YELLOW);
+                    if (WON && (Pieces[i][j] & 32) == 32) {
+                        g.setColor(Color.BLUE);
+                    }
                     g.drawOval((ScreenX / 5 * i) + 25, (ScreenY / 5 * j) + 75, 50, 50);
-                    drawPiece(g, pieces[i][j], (ScreenX / 5 * i) + 25, (ScreenY / 5 * j) + 75, false);
+                    if (turnState == 1 || turnState == 3) {
+                        drawPiece(g, NUPieces[i][j], (ScreenX / 5 * i) + 25, (ScreenY / 5 * j) + 75, false);
+                    } else {
+                        drawPiece(g, Pieces[i][j], (ScreenX / 5 * i) + 25, (ScreenY / 5 * j) + 75, false);
+                    }
                 }
             }
+            String tmp = "";
+            if (WON) {
+                tmp = (turnState > 2 ? "Player One Won!" : "Player Two Won!") + " Play again?";
+            } else {
+                switch (turnState) {
+                    case 1:
+                        tmp = "Player One, Give Player Two a Piece";
+                        break;
+                    case 2:
+                        tmp = "Player Two, Play the Piece";
+                        break;
+                    case 3:
+                        tmp = "Player Two, Give Player One a Piece";
+                        break;
+                    case 4:
+                        tmp = "Player One, Play the Piece";
+                        break;
+                    default:
+                        tmp = "You done fucked up.";
+                }
+            }
+            g.setColor(Color.WHITE);
+            g.drawString(tmp, 75, 40);
         }
 
         @Override
         public void mouseClicked(MouseEvent e) {
-            if (MO) {System.out.println("E");
+            if (WON) {
+                reset();
+            } else if (MO) {
                 if (turnState == 1 || turnState == 3) {
-                    queue=pieces[MR][MC];
-                    queue-=0b00010000;
-                }else{
-                    pieces[MR][MC]=queue;
-                    queue=0b00010000;
+                    if ((NUPieces[MR][MC] & 16) == 16) {
+                        queue = NUPieces[MR][MC];
+                        queue -= 0b00010000;
+                        NUPieces[MR][MC] -= 0b00010000;
+                        turnState = (turnState % 4) + 1;
+                    }
+                } else if ((Pieces[MR][MC] & 16) == 16) {
+                    Pieces[MR][MC] = queue;
+                    queue = 0b00010000;
+                    if (checkWin()) {
+                    } else {
+                        turnState = (turnState % 4) + 1;
+                    }
                 }
             }
             repaint();
@@ -111,12 +210,18 @@ public class Main {
 
         @Override
         public void mousePressed(MouseEvent e) {
+            if (WON) {
+                return;
+            }
             MouseDown = true;
             repaint();
         }
 
         @Override
         public void mouseReleased(MouseEvent e) {
+            if (WON) {
+                return;
+            }
             MouseDown = false;
             repaint();
         }
@@ -136,6 +241,9 @@ public class Main {
 
         @Override
         public void mouseMoved(MouseEvent e) {
+            if (WON) {
+                return;
+            }
             MO = false;
             for (int i = 0; i < 4; i++) {
                 for (int j = 0; j < 4; j++) {
