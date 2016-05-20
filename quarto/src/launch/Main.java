@@ -62,16 +62,26 @@ public class Main {
         boolean CH(int i, int b, boolean f) {
             if (f) {
                 return ((Pieces[i][0] | Pieces[i][1] | Pieces[i][2] | Pieces[i][3]) < 16)
-                        && (((Pieces[i][0] & b) == (Pieces[i][1] & b)) == ((Pieces[i][2] & b) == (Pieces[i][3] & b)));
+                        &&
+                                CB(i,0,b) == CB(i,1,b)&&
+                                CB(i,1,b) == CB(i,2,b)&&
+                                CB(i,2,b) == CB(i,3,b)&&
+                                CB(i,3,b) == CB(i,1,b);
             } else {
                 return ((Pieces[0][i] | Pieces[1][i] | Pieces[2][i] | Pieces[3][i]) < 16)
-                        && (((Pieces[0][1] & b) == (Pieces[1][1] & b)) == ((Pieces[2][i] & b) == (Pieces[3][i] & b)));
+                        &&
+                                CB(0,i,b) == CB(1,i,b)&&
+                                CB(1,i,b) == CB(2,i,b)&&
+                                CB(2,i,b) == CB(3,i,b)&&
+                                CB(3,i,b) == CB(0,i,b);
             }
         }
-
+        int CB(int i, int j, int k){
+            return (Pieces[i][j] & (byte) Math.pow(2, k));
+        }
         boolean checkWin() {
             for (int i = 0; i < 4; i++) {
-                if (CH(i, 1, true) || CH(i, 2, true) || CH(i, 4, true) || CH(i, 8, true)) {
+                if (CH(i, 0, true) || CH(i, 1, true) || CH(i, 2, true) || CH(i, 3, true)) {
                     WON = true;
                     Pieces[i][0] += 32;
                     Pieces[i][1] += 32;
@@ -81,7 +91,7 @@ public class Main {
                 }
             }
             for (int i = 0; i < 4; i++) {
-                if (CH(i, 1, false) || CH(i, 2, false) || CH(i, 4, false) || CH(i, 8, false)) {
+                if (CH(i, 0, false) || CH(i, 1, false) || CH(i, 2, false) || CH(i, 3, false)) {
                     WON = true;
                     Pieces[0][i] += 32;
                     Pieces[1][i] += 32;
@@ -94,8 +104,13 @@ public class Main {
                 for (int j = 0; j < 3; j++) {
                     for (int k = 0; k < 4; k++) {
                         if (((Pieces[i][j] | Pieces[i][j + 1] | Pieces[i + 1][j] | Pieces[i + 1][j + 1]) < 16)
-                                && (((Pieces[i][j] & (byte) Math.pow(2, k)) == (Pieces[i][j + 1] & (byte) Math.pow(2, k)))
-                                == ((Pieces[i + 1][j] & (byte) Math.pow(2, k)) == (Pieces[i + 1][j + 1] & (byte) Math.pow(2, k))))) {
+                                && (
+                                CB(i,j,k) == CB(i,j+1,k)&&
+                                CB(i,j+1,k) == CB(i+1,j,k)&&
+                                CB(i+1,j,k) == CB(i+1,j+1,k)&&
+                                CB(i+1,j+1,k) == CB(i,j,k)
+                                )
+                                ) {
                             Pieces[i][j] += 32;
                             Pieces[i][j + 1] += 32;
                             Pieces[i + 1][j] += 32;
@@ -210,18 +225,12 @@ public class Main {
 
         @Override
         public void mousePressed(MouseEvent e) {
-            if (WON) {
-                return;
-            }
             MouseDown = true;
             repaint();
         }
 
         @Override
         public void mouseReleased(MouseEvent e) {
-            if (WON) {
-                return;
-            }
             MouseDown = false;
             repaint();
         }
@@ -241,9 +250,6 @@ public class Main {
 
         @Override
         public void mouseMoved(MouseEvent e) {
-            if (WON) {
-                return;
-            }
             MO = false;
             for (int i = 0; i < 4; i++) {
                 for (int j = 0; j < 4; j++) {
