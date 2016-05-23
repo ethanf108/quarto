@@ -3,14 +3,13 @@ package launch;
 import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.Rectangle;
-import java.awt.Toolkit;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
 import javax.swing.JFrame;
 import static javax.swing.JFrame.EXIT_ON_CLOSE;
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
 
 public class Main {
 
@@ -53,75 +52,75 @@ public class Main {
 
         public DRAW() {
             super();
+            SwingUtilities.invokeLater(() -> {
+                setBounds(0, 0, ScreenX, ScreenY);
+                addMouseListener(this);
+                addMouseMotionListener(this);
+            });
             reset();
-            setBounds(0, 0, ScreenX, ScreenY);
-            addMouseListener(this);
-            addMouseMotionListener(this);
         }
 
         boolean CH(int i, int b, boolean f) {
             if (f) {
                 return ((Pieces[i][0] | Pieces[i][1] | Pieces[i][2] | Pieces[i][3]) < 16)
-                        &&
-                                CB(i,0,b) == CB(i,1,b)&&
-                                CB(i,1,b) == CB(i,2,b)&&
-                                CB(i,2,b) == CB(i,3,b)&&
-                                CB(i,3,b) == CB(i,1,b);
+                        && CB(i, 0, b) == CB(i, 1, b)
+                        && CB(i, 1, b) == CB(i, 2, b)
+                        && CB(i, 2, b) == CB(i, 3, b)
+                        && CB(i, 3, b) == CB(i, 1, b);
             } else {
                 return ((Pieces[0][i] | Pieces[1][i] | Pieces[2][i] | Pieces[3][i]) < 16)
-                        &&
-                                CB(0,i,b) == CB(1,i,b)&&
-                                CB(1,i,b) == CB(2,i,b)&&
-                                CB(2,i,b) == CB(3,i,b)&&
-                                CB(3,i,b) == CB(0,i,b);
+                        && CB(0, i, b) == CB(1, i, b)
+                        && CB(1, i, b) == CB(2, i, b)
+                        && CB(2, i, b) == CB(3, i, b)
+                        && CB(3, i, b) == CB(0, i, b);
             }
         }
-        int CB(int i, int j, int k){
+
+        int CB(int i, int j, int k) {
             return (Pieces[i][j] & (byte) Math.pow(2, k));
         }
+
         boolean checkWin() {
+            boolean returnT = false;
             for (int i = 0; i < 4; i++) {
                 if (CH(i, 0, true) || CH(i, 1, true) || CH(i, 2, true) || CH(i, 3, true)) {
-                    WON = true;
                     Pieces[i][0] += 32;
                     Pieces[i][1] += 32;
                     Pieces[i][2] += 32;
                     Pieces[i][3] += 32;
-                    return true;
+                    returnT = true;
+                    WON = true;
                 }
             }
             for (int i = 0; i < 4; i++) {
                 if (CH(i, 0, false) || CH(i, 1, false) || CH(i, 2, false) || CH(i, 3, false)) {
-                    WON = true;
                     Pieces[0][i] += 32;
                     Pieces[1][i] += 32;
                     Pieces[2][i] += 32;
                     Pieces[3][i] += 32;
-                    return true;
+                    returnT = true;
+                    WON = true;
                 }
             }
             for (int i = 0; i < 3; i++) {
                 for (int j = 0; j < 3; j++) {
                     for (int k = 0; k < 4; k++) {
                         if (((Pieces[i][j] | Pieces[i][j + 1] | Pieces[i + 1][j] | Pieces[i + 1][j + 1]) < 16)
-                                && (
-                                CB(i,j,k) == CB(i,j+1,k)&&
-                                CB(i,j+1,k) == CB(i+1,j,k)&&
-                                CB(i+1,j,k) == CB(i+1,j+1,k)&&
-                                CB(i+1,j+1,k) == CB(i,j,k)
-                                )
-                                ) {
+                                && (CB(i, j, k) == CB(i, j + 1, k)
+                                && CB(i, j + 1, k) == CB(i + 1, j, k)
+                                && CB(i + 1, j, k) == CB(i + 1, j + 1, k)
+                                && CB(i + 1, j + 1, k) == CB(i, j, k))) {
                             Pieces[i][j] += 32;
                             Pieces[i][j + 1] += 32;
                             Pieces[i + 1][j] += 32;
                             Pieces[i + 1][j + 1] += 32;
+                            returnT = true;
                             WON = true;
-                            return true;
                         }
                     }
                 }
             }
-            return false;
+            return returnT;
         }
 
         public void drawPiece(Graphics2D g, byte b, int x, int y, boolean q) {
@@ -163,7 +162,7 @@ public class Main {
             for (int i = 0; i < 4; i++) {
                 for (int j = 0; j < 4; j++) {
                     g.setColor(MO && i == MR && j == MC ? (MouseDown ? Color.RED : Color.GREEN) : Color.YELLOW);
-                    if (WON && (Pieces[i][j] & 32) == 32) {
+                    if ((Pieces[i][j] & 32) == 32) {
                         g.setColor(Color.BLUE);
                     }
                     g.drawOval((ScreenX / 5 * i) + 25, (ScreenY / 5 * j) + 75, 50, 50);
@@ -174,7 +173,7 @@ public class Main {
                     }
                 }
             }
-            String tmp = "";
+            String tmp;
             if (WON) {
                 tmp = (turnState > 2 ? "Player One Won!" : "Player Two Won!") + " Play again?";
             } else {
@@ -253,7 +252,7 @@ public class Main {
             MO = false;
             for (int i = 0; i < 4; i++) {
                 for (int j = 0; j < 4; j++) {
-                    if (new Rectangle((ScreenX / 5 * i) + 25, (ScreenY / 5 * j) + 75, 50, 50).intersects(new Rectangle(e.getX(), e.getY(), 1, 1))) {
+                    if (Math.abs(Math.sqrt(Math.pow((ScreenX / 5 * i) + 50 - e.getX(), 2) + Math.pow((ScreenY / 5 * j) + 100 - e.getY(), 2))) < 26.0) {
                         MR = i;
                         MC = j;
                         MO = true;
