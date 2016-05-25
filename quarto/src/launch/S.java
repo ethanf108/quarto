@@ -6,14 +6,21 @@ import java.awt.Graphics2D;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
 import javax.swing.JFrame;
 import static javax.swing.JFrame.EXIT_ON_CLOSE;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 
-public class Main {
+public class S {
 
-    public static final class DRAW extends JPanel implements MouseListener, MouseMotionListener {
+    public static class DRAW extends JPanel implements MouseListener, MouseMotionListener {
 
         static int ScreenX = 300, ScreenY = 300;
         int MR = 1, MC = 1;
@@ -24,6 +31,50 @@ public class Main {
         byte[][] Pieces = new byte[4][4];
         byte queue = 0b00010000;
         boolean WON = false;
+        Socket sender = null;
+        BufferedWriter dataSender = null;
+        boolean server;
+        private boolean ready = false;
+        private BufferedReader dataReader = null;
+
+        public void UPLOAD() {
+            try {
+                String s = null;
+                if (!ready) {
+                    return;
+                }
+                for (byte b[] : Pieces) {
+                    for (byte c : b) {
+                        s += String.format("%8s", Integer.toBinaryString(0b00010001)).replace(' ', '0');
+                    }
+                }
+                for (byte b[] : NUPieces) {
+                    for (byte c : b) {
+                        s += String.format("%8s", Integer.toBinaryString(0b00010001)).replace(' ', '0');
+                    }
+                }
+                s+="\n";
+                dataSender.write(s);
+                dataSender.flush();
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        }
+
+        public void DOWNLOAD() {
+            String h = null;
+            try {
+                h+=dataReader.readLine();
+            for (int i = 1; i < 4; i++) {
+                for (int j = 0; j < 4; j++) {
+                    String p = h.substring(((8*j)*i)-1, ((8*j)*i)+7);
+                    System.out.println("p");
+                }
+            }
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        }
 
         public void reset() {
             MR = 0;
@@ -80,6 +131,42 @@ public class Main {
             return (Pieces[i][j] & (byte) Math.pow(2, k));
         }
 
+        public void init() {
+            if (server) {
+                try {
+                    ServerSocket serv = new ServerSocket(1680);
+                    while (!serv.isBound()) {
+                    }
+                    sender = serv.accept();
+                    dataSender = new BufferedWriter(new OutputStreamWriter(sender.getOutputStream()));
+                    dataReader = new BufferedReader(new InputStreamReader(sender.getInputStream()));
+                    ready = true;
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
+            }else{
+                try {
+                    sender = new Socket("localhost",1680);
+                    while(!sender.isBound()){}
+                    dataSender = new BufferedWriter(new OutputStreamWriter(sender.getOutputStream()));
+                    dataReader = new BufferedReader(new InputStreamReader(sender.getInputStream()));
+                    ready = true;
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
+            }
+                new Thread(() -> {
+                    UPLOAD();
+                    DOWNLOAD();
+                    repaint();
+                    try {
+                        Thread.sleep(500);
+                    } catch (InterruptedException ex) {
+                        ex.printStackTrace();
+                    }
+                }).start();
+        }
+
         boolean checkWin() {
             boolean returnT = false;
             for (int i = 0; i < 4; i++) {
@@ -124,6 +211,9 @@ public class Main {
         }
 
         public void drawPiece(Graphics2D g, byte b, int x, int y, boolean q) {
+            if (!ready) {
+                return;
+            }
             if (q) {
                 if (b >= 16) {
                     return;
@@ -200,6 +290,9 @@ public class Main {
 
         @Override
         public void mouseClicked(MouseEvent e) {
+            if (!ready) {
+                return;
+            }
             if (WON) {
                 reset();
             } else if (MO) {
@@ -249,6 +342,9 @@ public class Main {
 
         @Override
         public void mouseMoved(MouseEvent e) {
+            if (!ready) {
+                return;
+            }
             MO = false;
             for (int i = 0; i < 4; i++) {
                 for (int j = 0; j < 4; j++) {
@@ -264,13 +360,22 @@ public class Main {
 
     }
 
-    public static void madin(String[] args) {
-        JFrame f = new JFrame("Quarto!");
-        f.setSize(300, 350);
-        f.setResizable(false);
-        f.setDefaultCloseOperation(EXIT_ON_CLOSE);
-        f.getContentPane().add(new DRAW());
-        f.setVisible(true);
+    public static void main(String[] args) {
+        final boolean t;
+        try {
+            t = (char) System.in.read() == 'y';
+            JFrame f = new JFrame("Quarto!");
+            f.setSize(300, 350);
+            f.setResizable(false);
+            f.setDefaultCloseOperation(EXIT_ON_CLOSE);
+            DRAW s = new DRAW();
+            s.server = t;
+            s.init();
+            f.getContentPane().add(s);
+            f.setVisible(true);
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
     }
 
 }
