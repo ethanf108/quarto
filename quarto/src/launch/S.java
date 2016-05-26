@@ -6,6 +6,7 @@ import java.awt.Graphics2D;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
+import java.awt.event.WindowEvent;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -37,23 +38,21 @@ public class S {
         private boolean ready = false;
         private BufferedReader dataReader = null;
 
-        public void UPLOAD() {
+        public void sendWait(int R, int C) {
+            ready = false;
+            UPLOAD(R, C);
+            DOWNLOAD();
+            ready = true;
+        }
+
+        public void UPLOAD(int R, int C) {
             try {
-                String s = null;
-                if (!ready) {
-                    return;
-                }
-                for (byte b[] : Pieces) {
-                    for (byte c : b) {
-                        s += String.format("%8s", Integer.toBinaryString(0b00010001)).replace(' ', '0');
-                    }
-                }
-                for (byte b[] : NUPieces) {
-                    for (byte c : b) {
-                        s += String.format("%8s", Integer.toBinaryString(0b00010001)).replace(' ', '0');
-                    }
-                }
-                s+="\n";
+                String s = "";
+                s+="S";
+                s+=R;
+                s+="M";
+                s+=C;
+                s+="E";
                 dataSender.write(s);
                 dataSender.flush();
             } catch (IOException ex) {
@@ -62,15 +61,15 @@ public class S {
         }
 
         public void DOWNLOAD() {
-            String h = null;
+            String h = "";
             try {
-                h+=dataReader.readLine();
-            for (int i = 1; i < 4; i++) {
-                for (int j = 0; j < 4; j++) {
-                    String p = h.substring(((8*j)*i)-1, ((8*j)*i)+7);
-                    System.out.println("p");
+                char tmpC;
+                while((char)dataReader.read()!='S'){}
+                while((tmpC = (char)dataReader.read())!='E'){
+                    h+=tmpC;
                 }
-            }
+                System.out.println(h);
+
             } catch (IOException ex) {
                 ex.printStackTrace();
             }
@@ -144,10 +143,11 @@ public class S {
                 } catch (IOException ex) {
                     ex.printStackTrace();
                 }
-            }else{
+            } else {
                 try {
-                    sender = new Socket("localhost",1680);
-                    while(!sender.isBound()){}
+                    sender = new Socket("localhost", 1680);
+                    while (!sender.isBound()) {
+                    }
                     dataSender = new BufferedWriter(new OutputStreamWriter(sender.getOutputStream()));
                     dataReader = new BufferedReader(new InputStreamReader(sender.getInputStream()));
                     ready = true;
@@ -155,16 +155,6 @@ public class S {
                     ex.printStackTrace();
                 }
             }
-                new Thread(() -> {
-                    UPLOAD();
-                    DOWNLOAD();
-                    repaint();
-                    try {
-                        Thread.sleep(500);
-                    } catch (InterruptedException ex) {
-                        ex.printStackTrace();
-                    }
-                }).start();
         }
 
         boolean checkWin() {
@@ -290,9 +280,7 @@ public class S {
 
         @Override
         public void mouseClicked(MouseEvent e) {
-            if (!ready) {
-                return;
-            }
+            if(ready){
             if (WON) {
                 reset();
             } else if (MO) {
@@ -311,8 +299,10 @@ public class S {
                         turnState = (turnState % 4) + 1;
                     }
                 }
+                sendWait(MR,MC);
             }
             repaint();
+            }
         }
 
         @Override
@@ -342,9 +332,7 @@ public class S {
 
         @Override
         public void mouseMoved(MouseEvent e) {
-            if (!ready) {
-                return;
-            }
+            if (ready) {
             MO = false;
             for (int i = 0; i < 4; i++) {
                 for (int j = 0; j < 4; j++) {
@@ -356,6 +344,7 @@ public class S {
                 }
             }
             repaint();
+            }
         }
 
     }
