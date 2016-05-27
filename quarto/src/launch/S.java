@@ -14,6 +14,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import javax.swing.JFrame;
 import static javax.swing.JFrame.EXIT_ON_CLOSE;
 import javax.swing.JPanel;
@@ -37,25 +38,55 @@ public class S {
         boolean server;
         private boolean ready = false;
         private BufferedReader dataReader = null;
+        boolean ENDTIME = true;
+        byte onBUTTON = 0;
 
-        public void sendWait(int R, int C) {
-            ready = false;
-            UPLOAD(R, C);
-            DOWNLOAD();
-            ready = true;
+        public void CONFIRM(boolean f) {
+            ENDTIME = false;
+            while (true) {
+                try {
+                    if ((char) dataReader.read() == 'Y') {
+                        if(f){
+                        reset();
+                        ENDTIME = true;
+                        break;
+                        }
+                        sender = null;
+                        dataSender = null;
+                        dataReader = null;
+                        ready = false;
+                    } else if ((char) dataReader.read() == 'N') {
+                        sender = null;
+                        dataSender = null;
+                        dataReader = null;
+                        ready = false;
+                    }
+                        dataSender.write(f?"Y":"N");
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
+            }
+            new Thread(() -> {
+                while (ENDTIME) {
+                    DOWNLOAD();
+                }
+            }).start();
         }
 
         public void UPLOAD(int R, int C) {
             try {
                 String s = "";
-                s+="S";
-                s+=R;
-                s+="M";
-                s+=C;
-                s+="E";
+                s += "S";
+                s += R;
+                s += C;
+                s += "E";
                 dataSender.write(s);
                 dataSender.flush();
             } catch (IOException ex) {
+                if (ex instanceof SocketException) {
+                    System.out.println("CONECTION ERROR");
+                    System.exit(0);
+                }
                 ex.printStackTrace();
             }
         }
@@ -64,13 +95,31 @@ public class S {
             String h = "";
             try {
                 char tmpC;
-                while((char)dataReader.read()!='S'){}
-                while((tmpC = (char)dataReader.read())!='E'){
-                    h+=tmpC;
+                while ((char) dataReader.read() != 'S') {
                 }
-                System.out.println(h);
+                while ((tmpC = (char) dataReader.read()) != 'E') {
+                    h += tmpC;
+                }
+                boolean f = true;
+                int y = 0, j = 0;
+                for (char c : h.toCharArray()) {
+                    if (c == 'E') {
+                        break;
+                    }
+                    if (f) {
+                        y = Byte.parseByte(new String(new char[]{c}));
+                    } else {
+                        j = Byte.parseByte(new String(new char[]{c}));
+                    }
+                    f = !f;
+                }
+                click(y, j);
 
             } catch (IOException ex) {
+                if (ex instanceof SocketException) {
+                    System.out.println("CONECTION ERROR");
+                    System.exit(0);
+                }
                 ex.printStackTrace();
             }
         }
@@ -83,6 +132,7 @@ public class S {
             MO = false;
             WON = false;
             queue = 0b00010000;
+            server = false;
             for (int i = 0; i < 4; i++) {
                 for (int j = 0; j < 4; j++) {
                     NUPieces[i][j] = 0b00010000;
@@ -131,30 +181,38 @@ public class S {
         }
 
         public void init() {
-            if (server) {
-                try {
-                    ServerSocket serv = new ServerSocket(1680);
-                    while (!serv.isBound()) {
+            new Thread(() -> {
+                if (server) {
+                    try {
+                        ServerSocket serv = new ServerSocket(1680);
+                        while (!serv.isBound()) {
+                        }
+                        sender = serv.accept();
+                        dataSender = new BufferedWriter(new OutputStreamWriter(sender.getOutputStream()));
+                        dataReader = new BufferedReader(new InputStreamReader(sender.getInputStream()));
+                        ready = true;
+                    } catch (IOException ex) {
+                        ex.printStackTrace();
                     }
-                    sender = serv.accept();
-                    dataSender = new BufferedWriter(new OutputStreamWriter(sender.getOutputStream()));
-                    dataReader = new BufferedReader(new InputStreamReader(sender.getInputStream()));
-                    ready = true;
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                }
-            } else {
-                try {
-                    sender = new Socket("localhost", 1680);
-                    while (!sender.isBound()) {
+                } else {
+                    try {
+                        sender = new Socket("localhost", 1680);
+                        while (!sender.isBound()) {
+                        }
+                        dataSender = new BufferedWriter(new OutputStreamWriter(sender.getOutputStream()));
+                        dataReader = new BufferedReader(new InputStreamReader(sender.getInputStream()));
+                        ready = true;
+                    } catch (IOException ex) {
+                        ex.printStackTrace();
                     }
-                    dataSender = new BufferedWriter(new OutputStreamWriter(sender.getOutputStream()));
-                    dataReader = new BufferedReader(new InputStreamReader(sender.getInputStream()));
-                    ready = true;
-                } catch (IOException ex) {
-                    ex.printStackTrace();
                 }
-            }
+                new Thread(() -> {
+                    while (ENDTIME) {
+                        DOWNLOAD();
+                    }
+                }).start();
+                repaint();
+            }).start();
         }
 
         boolean checkWin() {
@@ -201,9 +259,6 @@ public class S {
         }
 
         public void drawPiece(Graphics2D g, byte b, int x, int y, boolean q) {
-            if (!ready) {
-                return;
-            }
             if (q) {
                 if (b >= 16) {
                     return;
@@ -236,6 +291,13 @@ public class S {
             Graphics2D g = (Graphics2D) g2;
             g.setColor(Color.GRAY);
             g.fillRect(0, 0, ScreenX, ScreenY + 100);
+            if (WON) {
+                g.setColor(onBUTTON == 1 ? Color.RED : Color.WHITE);
+                g.fillRect(40, 100, 100, 30);
+                g.setColor(onBUTTON == 2 ? Color.RED : Color.WHITE);
+                g.fillRect(150, 100, 100, 30);
+                return;
+            }
             g.setColor(Color.YELLOW);
             g.drawOval(10, 10, 50, 50);
             drawPiece(g, queue, 10, 10, true);
@@ -256,19 +318,34 @@ public class S {
             String tmp;
             if (WON) {
                 tmp = (turnState > 2 ? "Player One Won!" : "Player Two Won!") + " Play again?";
-            } else {
+            } else if (server) {
                 switch (turnState) {
                     case 1:
-                        tmp = "Player One, Give Player Two a Piece";
+                        tmp = "Give";
                         break;
                     case 2:
-                        tmp = "Player Two, Play the Piece";
-                        break;
                     case 3:
-                        tmp = "Player Two, Give Player One a Piece";
+                        tmp = "Wait";
                         break;
                     case 4:
-                        tmp = "Player One, Play the Piece";
+                        tmp = "Play";
+                        break;
+                    default:
+                        tmp = "You done fucked up.";
+                }
+            } else {
+                int tmpy = (turnState % 4) + 1;
+                tmpy = (tmpy % 4) + 1;
+                switch (tmpy) {
+                    case 1:
+                        tmp = "Give";
+                        break;
+                    case 2:
+                    case 3:
+                        tmp = "Wait";
+                        break;
+                    case 4:
+                        tmp = "Play";
                         break;
                     default:
                         tmp = "You done fucked up.";
@@ -278,31 +355,42 @@ public class S {
             g.drawString(tmp, 75, 40);
         }
 
+        public void click(int y, int j) {
+            if (turnState == 1 || turnState == 3) {
+                if ((NUPieces[y][j] & 16) == 16) {
+                    queue = NUPieces[y][j];
+                    queue -= 0b00010000;
+                    NUPieces[y][j] -= 0b00010000;
+                    turnState = (turnState % 4) + 1;
+                }
+            } else if ((Pieces[y][j] & 16) == 16) {
+                Pieces[y][j] = queue;
+                queue = 0b00010000;
+                if (checkWin()) {
+                } else {
+                    turnState = (turnState % 4) + 1;
+                }
+            }
+
+            repaint();
+        }
+
         @Override
         public void mouseClicked(MouseEvent e) {
-            if(ready){
-            if (WON) {
-                reset();
-            } else if (MO) {
-                if (turnState == 1 || turnState == 3) {
-                    if ((NUPieces[MR][MC] & 16) == 16) {
-                        queue = NUPieces[MR][MC];
-                        queue -= 0b00010000;
-                        NUPieces[MR][MC] -= 0b00010000;
-                        turnState = (turnState % 4) + 1;
-                    }
-                } else if ((Pieces[MR][MC] & 16) == 16) {
-                    Pieces[MR][MC] = queue;
-                    queue = 0b00010000;
-                    if (checkWin()) {
-                    } else {
-                        turnState = (turnState % 4) + 1;
-                    }
+            if (ready && (turnState == 1 || turnState == 4) == server) {
+                if (WON) {
+                } else if (MO) {
+                    click(MR, MC);
+                    UPLOAD(MR, MC);
                 }
-                sendWait(MR,MC);
+            }
+            if (WON) {
+                if (onBUTTON == 0) {
+                    return;
+                }
+                CONFIRM(onBUTTON==1);
             }
             repaint();
-            }
         }
 
         @Override
@@ -333,18 +421,27 @@ public class S {
         @Override
         public void mouseMoved(MouseEvent e) {
             if (ready) {
-            MO = false;
-            for (int i = 0; i < 4; i++) {
-                for (int j = 0; j < 4; j++) {
-                    if (Math.abs(Math.sqrt(Math.pow((ScreenX / 5 * i) + 50 - e.getX(), 2) + Math.pow((ScreenY / 5 * j) + 100 - e.getY(), 2))) < 26.0) {
-                        MR = i;
-                        MC = j;
-                        MO = true;
+                MO = false;
+                for (int i = 0; i < 4; i++) {
+                    for (int j = 0; j < 4; j++) {
+                        if (Math.abs(Math.sqrt(Math.pow((ScreenX / 5 * i) + 50 - e.getX(), 2) + Math.pow((ScreenY / 5 * j) + 100 - e.getY(), 2))) < 26.0) {
+                            MR = i;
+                            MC = j;
+                            MO = true;
+                        }
                     }
                 }
             }
-            repaint();
+            if (WON) {
+                if (e.getX() > 40 && e.getX() < 140 && e.getY() > 100 & e.getY() < 130) {
+                    onBUTTON = 1;
+                } else if (e.getX() > 150 && e.getX() < 250 && e.getY() > 100 & e.getY() < 130) {
+                    onBUTTON = 2;
+                } else {
+                    onBUTTON = 0;
+                }
             }
+            repaint();
         }
 
     }
