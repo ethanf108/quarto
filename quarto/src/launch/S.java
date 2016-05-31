@@ -40,37 +40,52 @@ public class S {
         private BufferedReader dataReader = null;
         boolean ENDTIME = true;
         byte onBUTTON = 0;
+        boolean STOPSEND = false;
 
         public void CONFIRM(boolean f) {
             ENDTIME = false;
             while (true) {
                 try {
-                    if ((char) dataReader.read() == 'Y') {
-                        if(f){
-                        reset();
-                        ENDTIME = true;
-                        break;
+                    STOPSEND = true;
+                    new Thread(() -> {
+                        while (STOPSEND) {
+                            try {
+                                dataSender.write(f ? "Y" : "N");
+                            } catch (IOException ex) {
+                                ex.printStackTrace();
+                            }
                         }
-                        sender = null;
-                        dataSender = null;
-                        dataReader = null;
-                        ready = false;
+                    }).start();
+                    if ((char) dataReader.read() == 'Y') {
+                        if (f) {
+                            reset();
+                            ENDTIME = true;
+                            new Thread(() -> {
+                                while (ENDTIME) {
+                                    DOWNLOAD();
+                                }
+                            }).start();
+                            new Thread(() -> {
+                                try {
+                                    Thread.sleep(2000);
+                                } catch (InterruptedException ex) {
+                                    ex.printStackTrace();
+                                }
+                                STOPSEND = false;
+                            }).start();
+                            return;
+                        }
+                        System.exit(0);
                     } else if ((char) dataReader.read() == 'N') {
-                        sender = null;
-                        dataSender = null;
-                        dataReader = null;
-                        ready = false;
+                        System.exit(0);
                     }
-                        dataSender.write(f?"Y":"N");
                 } catch (IOException ex) {
+                    if(ex instanceof SocketException){
+                        System.exit(1);
+                    }
                     ex.printStackTrace();
                 }
             }
-            new Thread(() -> {
-                while (ENDTIME) {
-                    DOWNLOAD();
-                }
-            }).start();
         }
 
         public void UPLOAD(int R, int C) {
@@ -96,13 +111,22 @@ public class S {
             try {
                 char tmpC;
                 while ((char) dataReader.read() != 'S') {
+                    if (!ENDTIME) {
+                        return;
+                    }
                 }
                 while ((tmpC = (char) dataReader.read()) != 'E') {
+                    if (!ENDTIME) {
+                        return;
+                    }
                     h += tmpC;
                 }
                 boolean f = true;
                 int y = 0, j = 0;
                 for (char c : h.toCharArray()) {
+                    if (!ENDTIME) {
+                        return;
+                    }
                     if (c == 'E') {
                         break;
                     }
@@ -132,7 +156,6 @@ public class S {
             MO = false;
             WON = false;
             queue = 0b00010000;
-            server = false;
             for (int i = 0; i < 4; i++) {
                 for (int j = 0; j < 4; j++) {
                     NUPieces[i][j] = 0b00010000;
@@ -291,11 +314,15 @@ public class S {
             Graphics2D g = (Graphics2D) g2;
             g.setColor(Color.GRAY);
             g.fillRect(0, 0, ScreenX, ScreenY + 100);
-            if (WON) {
+            if (true) {
                 g.setColor(onBUTTON == 1 ? Color.RED : Color.WHITE);
                 g.fillRect(40, 100, 100, 30);
                 g.setColor(onBUTTON == 2 ? Color.RED : Color.WHITE);
                 g.fillRect(150, 100, 100, 30);
+                g.setColor(Color.BLACK);
+                g.drawString("YES                             NO",80,120);
+                g.setColor(Color.WHITE);
+                g.drawString("PLAY AGAIN?",20,20);
                 return;
             }
             g.setColor(Color.YELLOW);
@@ -388,7 +415,7 @@ public class S {
                 if (onBUTTON == 0) {
                     return;
                 }
-                CONFIRM(onBUTTON==1);
+                CONFIRM(onBUTTON == 1);
             }
             repaint();
         }
