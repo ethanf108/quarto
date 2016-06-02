@@ -40,52 +40,72 @@ public class S {
         private BufferedReader dataReader = null;
         boolean ENDTIME = true;
         byte onBUTTON = 0;
-        boolean STOPSEND = false;
-
-        public void CONFIRM(boolean f) {
-            ENDTIME = false;
-            while (true) {
-                try {
-                    STOPSEND = true;
-                    new Thread(() -> {
-                        while (STOPSEND) {
-                            try {
-                                dataSender.write(f ? "Y" : "N");
-                            } catch (IOException ex) {
-                                ex.printStackTrace();
-                            }
-                        }
-                    }).start();
-                    if ((char) dataReader.read() == 'Y') {
-                        if (f) {
-                            reset();
-                            ENDTIME = true;
-                            new Thread(() -> {
-                                while (ENDTIME) {
-                                    DOWNLOAD();
-                                }
-                            }).start();
-                            new Thread(() -> {
-                                try {
-                                    Thread.sleep(2000);
-                                } catch (InterruptedException ex) {
-                                    ex.printStackTrace();
-                                }
-                                STOPSEND = false;
-                            }).start();
-                            return;
-                        }
-                        System.exit(0);
-                    } else if ((char) dataReader.read() == 'N') {
+        int OBS = 0;
+        private boolean SHOWWIN;
+        public void StartSocketListener(){
+            Thread t = new Thread(()->{
+                while(true){
+                    System.out.println("NO");
+                    if(sender.isClosed()){
+                        System.out.println("SOCKET CLOSED");
                         System.exit(0);
                     }
-                } catch (IOException ex) {
-                    if(ex instanceof SocketException){
-                        System.exit(1);
-                    }
-                    ex.printStackTrace();
                 }
-            }
+            });
+            t.setDaemon(true);
+            t.start();
+        }
+        void CloseCon() throws IOException{
+            sender.close();
+            System.exit(0);
+        }
+        public void CONFIRM() {
+            Thread t = new Thread(() -> {
+                BREAKER:{
+                while (true) {
+                    try {
+                        if (dataReader.ready()) {
+                            char s = (char) dataReader.read();
+                            if (s == 'Y') {
+                                if (OBS == 1) {
+                                    reset();
+                                    ENDTIME = true;
+                                    DOWNLOAD();
+                                    repaint();
+                                    dataSender.write('Y');
+                                    dataSender.flush();
+                                    break BREAKER;
+                                } else if (OBS == 2) {
+                                    CloseCon();
+                                }
+                            } else if (s == 'N') {
+                                dataSender.write('N');
+                                CloseCon();
+                            }
+                            System.out.println(s);
+                        }
+                        if (OBS != 0 && !sender.isClosed()) {
+                            dataSender.write(OBS == 1 ? 'Y' : 'N');
+                            dataSender.flush();
+                        }
+                        if (sender.isClosed()) {
+                            CloseCon();
+                        }
+                        Thread.sleep(500);
+                    } catch (IOException ex) {
+                        if (ex instanceof SocketException) {
+                            System.out.println("CONECTION ERROR");
+                            System.exit(0);
+                        }
+                        ex.printStackTrace();
+                    } catch (InterruptedException ex) {
+                        ex.printStackTrace();
+                    }
+                }
+                }
+            });
+            t.setDaemon(true);
+            t.start();
         }
 
         public void UPLOAD(int R, int C) {
@@ -99,7 +119,7 @@ public class S {
                 dataSender.flush();
             } catch (IOException ex) {
                 if (ex instanceof SocketException) {
-                    System.out.println("CONECTION ERROR");
+                    System.out.println("CONECTION SEND ERROR");
                     System.exit(0);
                 }
                 ex.printStackTrace();
@@ -107,45 +127,52 @@ public class S {
         }
 
         public void DOWNLOAD() {
-            String h = "";
-            try {
-                char tmpC;
-                while ((char) dataReader.read() != 'S') {
-                    if (!ENDTIME) {
-                        return;
+            Thread t = new Thread(() -> {
+                String h = "";
+                while (ENDTIME) {
+                    try {
+                        char tmpC;
+                        if (dataReader.ready()) {
+                            while ((char) dataReader.read() != 'S') {
+                                if (!ENDTIME) {
+                                    return;
+                                }
+                            }
+                            while ((tmpC = (char) dataReader.read()) != 'E') {
+                                if (!ENDTIME) {
+                                    return;
+                                }
+                                h += tmpC;
+                            }
+                            boolean f = true;
+                            int y = 0, j = 0;
+                            for (char c : h.toCharArray()) {
+                                if (!ENDTIME) {
+                                    return;
+                                }
+                                if (c == 'E') {
+                                    break;
+                                }
+                                if (f) {
+                                    y = Byte.parseByte(new String(new char[]{c}));
+                                } else {
+                                    j = Byte.parseByte(new String(new char[]{c}));
+                                }
+                                f = !f;
+                            }
+                            click(y, j);
+                        }
+                    } catch (IOException ex) {
+                        if (ex instanceof SocketException) {
+                            System.out.println("CONECTION READ ERROR");
+                            System.exit(0);
+                        }
+                        ex.printStackTrace();
                     }
                 }
-                while ((tmpC = (char) dataReader.read()) != 'E') {
-                    if (!ENDTIME) {
-                        return;
-                    }
-                    h += tmpC;
-                }
-                boolean f = true;
-                int y = 0, j = 0;
-                for (char c : h.toCharArray()) {
-                    if (!ENDTIME) {
-                        return;
-                    }
-                    if (c == 'E') {
-                        break;
-                    }
-                    if (f) {
-                        y = Byte.parseByte(new String(new char[]{c}));
-                    } else {
-                        j = Byte.parseByte(new String(new char[]{c}));
-                    }
-                    f = !f;
-                }
-                click(y, j);
-
-            } catch (IOException ex) {
-                if (ex instanceof SocketException) {
-                    System.out.println("CONECTION ERROR");
-                    System.exit(0);
-                }
-                ex.printStackTrace();
-            }
+            });
+            t.setDaemon(true);
+            t.start();
         }
 
         public void reset() {
@@ -155,6 +182,9 @@ public class S {
             turnState = 1;
             MO = false;
             WON = false;
+            OBS=0;
+            onBUTTON=0;
+            SHOWWIN=false;
             queue = 0b00010000;
             for (int i = 0; i < 4; i++) {
                 for (int j = 0; j < 4; j++) {
@@ -229,11 +259,8 @@ public class S {
                         ex.printStackTrace();
                     }
                 }
-                new Thread(() -> {
-                    while (ENDTIME) {
-                        DOWNLOAD();
-                    }
-                }).start();
+                DOWNLOAD();
+                StartSocketListener();
                 repaint();
             }).start();
         }
@@ -248,6 +275,8 @@ public class S {
                     Pieces[i][3] += 32;
                     returnT = true;
                     WON = true;
+                    ENDTIME = false;
+                    CONFIRM();
                 }
             }
             for (int i = 0; i < 4; i++) {
@@ -258,6 +287,8 @@ public class S {
                     Pieces[3][i] += 32;
                     returnT = true;
                     WON = true;
+                    ENDTIME = false;
+                    CONFIRM();
                 }
             }
             for (int i = 0; i < 3; i++) {
@@ -274,6 +305,8 @@ public class S {
                             Pieces[i + 1][j + 1] += 32;
                             returnT = true;
                             WON = true;
+                            ENDTIME = false;
+                            CONFIRM();
                         }
                     }
                 }
@@ -314,15 +347,15 @@ public class S {
             Graphics2D g = (Graphics2D) g2;
             g.setColor(Color.GRAY);
             g.fillRect(0, 0, ScreenX, ScreenY + 100);
-            if (true) {
+            if (WON&&SHOWWIN) {
                 g.setColor(onBUTTON == 1 ? Color.RED : Color.WHITE);
                 g.fillRect(40, 100, 100, 30);
                 g.setColor(onBUTTON == 2 ? Color.RED : Color.WHITE);
                 g.fillRect(150, 100, 100, 30);
                 g.setColor(Color.BLACK);
-                g.drawString("YES                             NO",80,120);
+                g.drawString("YES                             NO", 80, 120);
                 g.setColor(Color.WHITE);
-                g.drawString("PLAY AGAIN?",20,20);
+                g.drawString("PLAY AGAIN?", 20, 20);
                 return;
             }
             g.setColor(Color.YELLOW);
@@ -344,7 +377,7 @@ public class S {
             }
             String tmp;
             if (WON) {
-                tmp = (turnState > 2 ? "Player One Won!" : "Player Two Won!") + " Play again?";
+                tmp = (turnState > 2 ? "Player One Won!" : "Player Two Won!");
             } else if (server) {
                 switch (turnState) {
                     case 1:
@@ -394,6 +427,16 @@ public class S {
                 Pieces[y][j] = queue;
                 queue = 0b00010000;
                 if (checkWin()) {
+                    new Thread(()->{
+                try {
+                    SHOWWIN=false;
+                    Thread.sleep(2000);
+                    SHOWWIN=true;
+                    repaint();
+                } catch (InterruptedException ex) {
+                    System.out.println("INTERRUPTED");
+                    ex.printStackTrace();
+                }}).start();
                 } else {
                     turnState = (turnState % 4) + 1;
                 }
@@ -412,10 +455,7 @@ public class S {
                 }
             }
             if (WON) {
-                if (onBUTTON == 0) {
-                    return;
-                }
-                CONFIRM(onBUTTON == 1);
+                OBS = onBUTTON;
             }
             repaint();
         }
