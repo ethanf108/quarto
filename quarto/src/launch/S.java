@@ -3,10 +3,12 @@ package launch;
 import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.event.ActionEvent;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
 import java.awt.event.WindowEvent;
+import java.awt.event.WindowListener;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -15,9 +17,12 @@ import java.io.OutputStreamWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
+import javax.swing.BoxLayout;
+import javax.swing.JButton;
 import javax.swing.JFrame;
 import static javax.swing.JFrame.EXIT_ON_CLOSE;
 import javax.swing.JPanel;
+import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 
 public class S {
@@ -42,66 +47,74 @@ public class S {
         byte onBUTTON = 0;
         int OBS = 0;
         private boolean SHOWWIN;
-        public void StartSocketListener(){
-            Thread t = new Thread(()->{
-                while(true){
-                    System.out.println("NO");
-                    if(sender.isClosed()){
-                        System.out.println("SOCKET CLOSED");
-                        System.exit(0);
-                    }
-                }
-            });
-            t.setDaemon(true);
-            t.start();
-        }
-        void CloseCon() throws IOException{
-            sender.close();
-            System.exit(0);
-        }
-        public void CONFIRM() {
-            Thread t = new Thread(() -> {
-                BREAKER:{
-                while (true) {
-                    try {
-                        if (dataReader.ready()) {
-                            char s = (char) dataReader.read();
-                            if (s == 'Y') {
-                                if (OBS == 1) {
-                                    reset();
-                                    ENDTIME = true;
-                                    DOWNLOAD();
-                                    repaint();
-                                    dataSender.write('Y');
-                                    dataSender.flush();
-                                    break BREAKER;
-                                } else if (OBS == 2) {
-                                    CloseCon();
-                                }
-                            } else if (s == 'N') {
-                                dataSender.write('N');
-                                CloseCon();
-                            }
-                            System.out.println(s);
-                        }
-                        if (OBS != 0 && !sender.isClosed()) {
-                            dataSender.write(OBS == 1 ? 'Y' : 'N');
-                            dataSender.flush();
-                        }
-                        if (sender.isClosed()) {
-                            CloseCon();
-                        }
-                        Thread.sleep(500);
-                    } catch (IOException ex) {
+        boolean writing = false;
+        JTextField ADDRESS = new JTextField();
+        JButton isServ = new JButton("Host"){{
+            addActionListener((ActionEvent e)->{server=true;initConn("");});
+        }};
+        JButton Connect = new JButton("Connect"){{
+           addActionListener((ActionEvent e)->{initConn(ADDRESS.getText());});
+        }};
+        JPanel SETUP = new JPanel(){{
+            setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+            add(ADDRESS);
+            add(Connect);
+            add(isServ);
+        }};
+        void CloseCon() {
+            try {
+                sender.close();
+            } catch (IOException ex) {
                         if (ex instanceof SocketException) {
-                            System.out.println("CONECTION ERROR");
+                            System.out.println("CONECTION READ ERROR");
                             System.exit(0);
                         }
-                        ex.printStackTrace();
-                    } catch (InterruptedException ex) {
-                        ex.printStackTrace();
+                ex.printStackTrace();
+            }
+            System.exit(0);
+        }
+
+        public void CONFIRM() {
+            Thread t = new Thread(() -> {
+                BREAKER:
+                {
+                    while (true) {
+                        try {
+                            if (dataReader.ready()) {
+                                char s = (char) dataReader.read();
+                                if (s == 'Y') {
+                                    if (OBS == 1) {
+                                        reset();
+                                        ENDTIME = true;
+                                        DOWNLOAD();
+                                        repaint();
+                                        dataSender.write('Y');
+                                        dataSender.flush();
+                                        break BREAKER;
+                                    } else if (OBS == 2) {
+                                        CloseCon();
+                                    }
+                                } else if (s == 'N') {
+                                    dataSender.write('N');
+                                    CloseCon();
+                                }
+                            }else if(!writing)dataSender.write('H');
+                            if (OBS != 0 && !sender.isClosed()) {
+                                dataSender.write(OBS == 1 ? 'Y' : 'N');
+                                dataSender.flush();
+                            }
+                            if(OBS==2)CloseCon();
+                            Thread.sleep(500);
+                        } catch (IOException ex) {
+                            if (ex instanceof SocketException) {
+                                System.out.println("CONECTION ERROR");
+                                System.exit(0);
+                            }
+                            ex.printStackTrace();
+                        } catch (InterruptedException ex) {
+                            ex.printStackTrace();
+                        }
                     }
-                }
                 }
             });
             t.setDaemon(true);
@@ -110,6 +123,7 @@ public class S {
 
         public void UPLOAD(int R, int C) {
             try {
+                writing = true;
                 String s = "";
                 s += "S";
                 s += R;
@@ -123,6 +137,8 @@ public class S {
                     System.exit(0);
                 }
                 ex.printStackTrace();
+            }finally{
+                writing = false;
             }
         }
 
@@ -161,11 +177,13 @@ public class S {
                                 f = !f;
                             }
                             click(y, j);
+                        }else if(!writing){
+                            dataSender.write('H');
                         }
                     } catch (IOException ex) {
                         if (ex instanceof SocketException) {
                             System.out.println("CONECTION READ ERROR");
-                            System.exit(0);
+                            CloseCon();
                         }
                         ex.printStackTrace();
                     }
@@ -182,9 +200,9 @@ public class S {
             turnState = 1;
             MO = false;
             WON = false;
-            OBS=0;
-            onBUTTON=0;
-            SHOWWIN=false;
+            OBS = 0;
+            onBUTTON = 0;
+            SHOWWIN = false;
             queue = 0b00010000;
             for (int i = 0; i < 4; i++) {
                 for (int j = 0; j < 4; j++) {
@@ -209,6 +227,7 @@ public class S {
                 setBounds(0, 0, ScreenX, ScreenY);
                 addMouseListener(this);
                 addMouseMotionListener(this);
+                add(SETUP);
             });
             reset();
         }
@@ -233,7 +252,7 @@ public class S {
             return (Pieces[i][j] & (byte) Math.pow(2, k));
         }
 
-        public void init() {
+        public void initConn(final String ADDS) {
             new Thread(() -> {
                 if (server) {
                     try {
@@ -244,23 +263,32 @@ public class S {
                         dataSender = new BufferedWriter(new OutputStreamWriter(sender.getOutputStream()));
                         dataReader = new BufferedReader(new InputStreamReader(sender.getInputStream()));
                         ready = true;
+                        remove(SETUP);
                     } catch (IOException ex) {
+                        if (ex instanceof SocketException) {
+                            System.out.println("CONECTION READ ERROR");
+                            CloseCon();
+                        }
                         ex.printStackTrace();
                     }
                 } else {
                     try {
-                        sender = new Socket("localhost", 1680);
+                        sender = new Socket(ADDS, 1680);
                         while (!sender.isBound()) {
                         }
                         dataSender = new BufferedWriter(new OutputStreamWriter(sender.getOutputStream()));
                         dataReader = new BufferedReader(new InputStreamReader(sender.getInputStream()));
                         ready = true;
+                        remove(SETUP);
                     } catch (IOException ex) {
+                        if (ex instanceof SocketException) {
+                            System.out.println("CONECTION READ ERROR");
+                            CloseCon();
+                        }
                         ex.printStackTrace();
                     }
                 }
                 DOWNLOAD();
-                StartSocketListener();
                 repaint();
             }).start();
         }
@@ -347,7 +375,7 @@ public class S {
             Graphics2D g = (Graphics2D) g2;
             g.setColor(Color.GRAY);
             g.fillRect(0, 0, ScreenX, ScreenY + 100);
-            if (WON&&SHOWWIN) {
+            if (WON && SHOWWIN) {
                 g.setColor(onBUTTON == 1 ? Color.RED : Color.WHITE);
                 g.fillRect(40, 100, 100, 30);
                 g.setColor(onBUTTON == 2 ? Color.RED : Color.WHITE);
@@ -427,16 +455,17 @@ public class S {
                 Pieces[y][j] = queue;
                 queue = 0b00010000;
                 if (checkWin()) {
-                    new Thread(()->{
-                try {
-                    SHOWWIN=false;
-                    Thread.sleep(2000);
-                    SHOWWIN=true;
-                    repaint();
-                } catch (InterruptedException ex) {
-                    System.out.println("INTERRUPTED");
-                    ex.printStackTrace();
-                }}).start();
+                    new Thread(() -> {
+                        try {
+                            SHOWWIN = false;
+                            Thread.sleep(2000);
+                            SHOWWIN = true;
+                            repaint();
+                        } catch (InterruptedException ex) {
+                            System.out.println("INTERRUPTED");
+                            ex.printStackTrace();
+                        }
+                    }).start();
                 } else {
                     turnState = (turnState % 4) + 1;
                 }
@@ -514,21 +543,14 @@ public class S {
     }
 
     public static void main(String[] args) {
-        final boolean t;
-        try {
-            t = (char) System.in.read() == 'y';
             JFrame f = new JFrame("Quarto!");
             f.setSize(300, 350);
             f.setResizable(false);
-            f.setDefaultCloseOperation(EXIT_ON_CLOSE);
+            f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             DRAW s = new DRAW();
-            s.server = t;
-            s.init();
             f.getContentPane().add(s);
             f.setVisible(true);
-        } catch (IOException ex) {
-            ex.printStackTrace();
-        }
+        
     }
 
 }
